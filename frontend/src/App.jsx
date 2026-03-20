@@ -1,213 +1,271 @@
-import { useState, useEffect } from 'react';
-import { api } from './api';
+import { useState, useRef, useEffect } from "react";
 
-function App() {
-  const [transactions, setTransactions] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [amount, setAmount] = useState('');
-  const [description, setDescription] = useState('');
-  const [categoryId, setCategoryId] = useState('');
+const API = "http://localhost:8000/api/v1";
 
-  useEffect(() => {
-    loadData();
-  }, []);
+// ── Types ────────────────────────────────────────────────────────────────────
+const ROLES = { USER: "user", BOT: "bot" };
 
-  const loadData = async () => {
-    try {
-      const [transRes, catRes] = await Promise.all([
-        api.getTransactions(),
-        api.getCategories()
-      ]);
-      setTransactions(transRes.data);
-      setCategories(catRes.data);
-      setLoading(false);
-    } catch (error) {
-      console.error('Error loading data:', error);
-      setLoading(false);
-    }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    try {
-      await api.createTransaction({
-        amount: parseFloat(amount),
-        description,
-        category_id: categoryId ? parseInt(categoryId) : null,
-        date: new Date().toISOString(),
-        type: 'expense'
-      });
-      
-      const res = await api.getTransactions();
-      setTransactions(res.data);
-      
-      setAmount('');
-      setDescription('');
-      setCategoryId('');
-    } catch (error) {
-      console.error('Error creating transaction:', error);
-      alert('Error adding transaction. Make sure backend is running!');
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-xl">Loading...</div>
-      </div>
-    );
+// ── API helpers ──────────────────────────────────────────────────────────────
+async function uploadFile(file) {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(`${API}/upload`, { method: "POST", body: form });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.detail || "Upload failed");
   }
+  return res.json();
+}
 
-  const totalExpenses = transactions.reduce((sum, t) => sum + t.amount, 0);
+async function fetchDocuments() {
+  const res = await fetch(`${API}/documents`);
+  return res.json();
+}
+
+async function deleteDocument(docId) {
+  await fetch(`${API}/documents/${docId}`, { method: "DELETE" });
+}
+
+async function askQuestion(question) {
+  const res = await fetch(`${API}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question }),
+  });
+  if (!res.ok) throw new Error("Chat request failed");
+  return res.json();
+}
+
+// ── Subcomponents ────────────────────────────────────────────────────────────
+
+function UploadZone({ onUpload, uploading }) {
+  const inputRef = useRef();
+  const [dragging, setDragging] = useState(false);
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setDragging(false);
+    const file = e.dataTransfer.files[0];
+    if (file) onUpload(file);
+  };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-8">
-      <div className="max-w-5xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-800 mb-2">
-            💰 SmartBudget
-          </h1>
-          <p className="text-gray-600">AI-Powered Personal Finance Tracker</p>
-        </div>
-        
-        {/* Stats Dashboard */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-red-500">
-            <div className="text-sm text-gray-500 mb-1">Total Expenses</div>
-            <div className="text-3xl font-bold text-red-500">
-              ${totalExpenses.toFixed(2)}
-            </div>
-          </div>
-          
-          <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-blue-500">
-            <div className="text-sm text-gray-500 mb-1">Transactions</div>
-            <div className="text-3xl font-bold text-blue-500">
-              {transactions.length}
-            </div>
-          </div>
-          
-          <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-green-500">
-            <div className="text-sm text-gray-500 mb-1">Avg per Transaction</div>
-            <div className="text-3xl font-bold text-green-500">
-              ${transactions.length > 0 ? (totalExpenses / transactions.length).toFixed(2) : '0.00'}
-            </div>
-          </div>
-        </div>
-        
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Add Transaction Form */}
-          <div className="bg-white rounded-xl shadow-lg p-6">
-            <h2 className="text-2xl font-semibold mb-6 text-gray-800">
-              ➕ Add Transaction
-            </h2>
-            <form onSubmit={handleSubmit} className="space-y-5">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Amount ($)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  className="w-full border-2 border-gray-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                  placeholder="50.00"
-                  required
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Description
-                </label>
-                <input
-                  type="text"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  className="w-full border-2 border-gray-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                  placeholder="Lunch at Starbucks"
-                  required
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Category
-                </label>
-                <select
-                  value={categoryId}
-                  onChange={(e) => setCategoryId(e.target.value)}
-                  className="w-full border-2 border-gray-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                >
-                  <option value="">🤖 Auto-categorize with AI</option>
-                  {categories.filter(c => c.type === 'expense').map(cat => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.icon} {cat.name}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-xs text-gray-500 mt-1">
-                  Leave blank to let AI categorize automatically
-                </p>
-              </div>
-              
-              <button
-                type="submit"
-                className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-6 py-3 rounded-lg hover:from-blue-600 hover:to-indigo-700 font-medium transition shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
-              >
-                Add Transaction
-              </button>
-            </form>
-          </div>
+    <div
+      onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+      onDragLeave={() => setDragging(false)}
+      onDrop={handleDrop}
+      onClick={() => inputRef.current.click()}
+      style={{
+        border: `1.5px dashed ${dragging ? "#7c3aed" : "#d1d5db"}`,
+        borderRadius: 12,
+        padding: "24px 16px",
+        textAlign: "center",
+        cursor: "pointer",
+        background: dragging ? "#f5f3ff" : "transparent",
+        transition: "all 0.2s",
+        marginBottom: 16,
+      }}
+    >
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".pdf,.txt,.md"
+        style={{ display: "none" }}
+        onChange={(e) => onUpload(e.target.files[0])}
+      />
+      <div style={{ fontSize: 28, marginBottom: 8 }}>📄</div>
+      <p style={{ margin: 0, fontSize: 13, color: "#6b7280" }}>
+        {uploading ? "Uploading & indexing…" : "Drop PDF / TXT / MD or click to browse"}
+      </p>
+    </div>
+  );
+}
 
-          {/* Transactions List */}
-          <div className="bg-white rounded-xl shadow-lg p-6">
-            <h2 className="text-2xl font-semibold mb-6 text-gray-800">
-              📊 Recent Transactions
-            </h2>
-            
-            {transactions.length === 0 ? (
-              <div className="text-center py-12">
-                <div className="text-6xl mb-4">🚀</div>
-                <p className="text-gray-500 text-lg">No transactions yet</p>
-                <p className="text-gray-400 text-sm mt-2">
-                  Add your first transaction to get started!
-                </p>
+function DocItem({ doc, onDelete }) {
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", justifyContent: "space-between",
+      padding: "8px 12px", borderRadius: 8, background: "#f9fafb",
+      border: "0.5px solid #e5e7eb", marginBottom: 6, fontSize: 13,
+    }}>
+      <div>
+        <div style={{ fontWeight: 500, color: "#111827" }}>{doc.filename}</div>
+        <div style={{ color: "#9ca3af", fontSize: 12 }}>{doc.total_chunks} chunks</div>
+      </div>
+      <button
+        onClick={() => onDelete(doc.doc_id)}
+        style={{ background: "none", border: "none", cursor: "pointer", color: "#ef4444", fontSize: 16 }}
+        title="Remove document"
+      >×</button>
+    </div>
+  );
+}
+
+function Message({ msg }) {
+  const isUser = msg.role === ROLES.USER;
+  return (
+    <div style={{
+      display: "flex", justifyContent: isUser ? "flex-end" : "flex-start",
+      marginBottom: 12,
+    }}>
+      <div style={{
+        maxWidth: "75%",
+        padding: "10px 14px",
+        borderRadius: isUser ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
+        background: isUser ? "#7c3aed" : "#f3f4f6",
+        color: isUser ? "#fff" : "#111827",
+        fontSize: 14, lineHeight: 1.6,
+      }}>
+        {msg.content}
+        {msg.sources && msg.sources.length > 0 && (
+          <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(0,0,0,0.1)" }}>
+            <div style={{ fontSize: 11, opacity: 0.7, marginBottom: 4 }}>Sources</div>
+            {msg.sources.map((s, i) => (
+              <div key={i} style={{ fontSize: 11, opacity: 0.8 }}>
+                📎 {s.filename} · chunk {s.chunk_index} · score {s.score}
               </div>
-            ) : (
-              <div className="space-y-3 max-h-[500px] overflow-y-auto">
-                {transactions.slice(0).reverse().map(t => (
-                  <div 
-                    key={t.id} 
-                    className="flex justify-between items-center p-4 border-2 border-gray-100 rounded-lg hover:border-blue-200 hover:shadow-md transition"
-                  >
-                    <div className="flex-1">
-                      <div className="font-medium text-gray-800">
-                        {t.description}
-                      </div>
-                      <div className="text-sm text-gray-500 mt-1">
-                        <span className="inline-block mr-2">
-                          {categories.find(c => c.id === t.category_id)?.icon || '📝'}
-                        </span>
-                        {t.category_name || 'Uncategorized'} • 
-                        {' '}{new Date(t.date).toLocaleDateString()}
-                      </div>
-                    </div>
-                    <div className="text-xl font-bold text-red-500 ml-4">
-                      -${t.amount.toFixed(2)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+            ))}
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
 }
 
-export default App;
+// ── Main App ─────────────────────────────────────────────────────────────────
+
+export default function App() {
+  const [docs, setDocs] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState(null);
+  const [messages, setMessages] = useState([
+    { role: ROLES.BOT, content: "Hi! Upload a document and ask me anything about it." },
+  ]);
+  const [input, setInput] = useState("");
+  const [thinking, setThinking] = useState(false);
+  const bottomRef = useRef();
+
+  useEffect(() => {
+    fetchDocuments().then(setDocs).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, thinking]);
+
+  const handleUpload = async (file) => {
+    setUploading(true);
+    setUploadStatus(null);
+    try {
+      const result = await uploadFile(file);
+      setUploadStatus({ type: "success", text: `✓ ${result.filename} — ${result.chunks_created} chunks indexed` });
+      const updated = await fetchDocuments();
+      setDocs(updated);
+    } catch (e) {
+      setUploadStatus({ type: "error", text: `✗ ${e.message}` });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDelete = async (docId) => {
+    await deleteDocument(docId);
+    setDocs(docs.filter((d) => d.doc_id !== docId));
+  };
+
+  const handleSend = async () => {
+    const q = input.trim();
+    if (!q || thinking) return;
+    setInput("");
+    setMessages((m) => [...m, { role: ROLES.USER, content: q }]);
+    setThinking(true);
+    try {
+      const result = await askQuestion(q);
+      setMessages((m) => [...m, { role: ROLES.BOT, content: result.answer, sources: result.sources }]);
+    } catch {
+      setMessages((m) => [...m, { role: ROLES.BOT, content: "Something went wrong. Is the backend running?" }]);
+    } finally {
+      setThinking(false);
+    }
+  };
+
+  return (
+    <div style={{ display: "flex", height: "100vh", fontFamily: "'Inter', sans-serif", background: "#fff" }}>
+      {/* Sidebar */}
+      <div style={{
+        width: 280, borderRight: "1px solid #e5e7eb", padding: 20,
+        display: "flex", flexDirection: "column", background: "#fafafa",
+      }}>
+        <div style={{ fontSize: 18, fontWeight: 700, color: "#7c3aed", marginBottom: 4 }}>DocuMindAI</div>
+        <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 20 }}>RAG Document Intelligence</div>
+
+        <UploadZone onUpload={handleUpload} uploading={uploading} />
+
+        {uploadStatus && (
+          <div style={{
+            fontSize: 12, padding: "8px 12px", borderRadius: 8, marginBottom: 12,
+            background: uploadStatus.type === "success" ? "#f0fdf4" : "#fef2f2",
+            color: uploadStatus.type === "success" ? "#16a34a" : "#dc2626",
+            border: `0.5px solid ${uploadStatus.type === "success" ? "#bbf7d0" : "#fecaca"}`,
+          }}>
+            {uploadStatus.text}
+          </div>
+        )}
+
+        <div style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          Documents ({docs.length})
+        </div>
+        <div style={{ flex: 1, overflowY: "auto" }}>
+          {docs.length === 0
+            ? <div style={{ fontSize: 13, color: "#d1d5db", textAlign: "center", marginTop: 16 }}>No documents yet</div>
+            : docs.map((d) => <DocItem key={d.doc_id} doc={d} onDelete={handleDelete} />)
+          }
+        </div>
+      </div>
+
+      {/* Chat panel */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        <div style={{ flex: 1, overflowY: "auto", padding: "24px 32px" }}>
+          {messages.map((m, i) => <Message key={i} msg={m} />)}
+          {thinking && (
+            <div style={{ display: "flex", justifyContent: "flex-start", marginBottom: 12 }}>
+              <div style={{ padding: "10px 14px", borderRadius: "16px 16px 16px 4px", background: "#f3f4f6", fontSize: 14 }}>
+                <span style={{ animation: "pulse 1s infinite" }}>Thinking…</span>
+              </div>
+            </div>
+          )}
+          <div ref={bottomRef} />
+        </div>
+
+        {/* Input bar */}
+        <div style={{
+          padding: "16px 24px", borderTop: "1px solid #e5e7eb",
+          display: "flex", gap: 10,
+        }}>
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSend()}
+            placeholder="Ask anything about your documents…"
+            style={{
+              flex: 1, padding: "10px 16px", borderRadius: 10,
+              border: "1px solid #e5e7eb", fontSize: 14, outline: "none",
+            }}
+          />
+          <button
+            onClick={handleSend}
+            disabled={thinking}
+            style={{
+              padding: "10px 20px", borderRadius: 10,
+              background: thinking ? "#ddd" : "#7c3aed", color: "#fff",
+              border: "none", cursor: thinking ? "default" : "pointer",
+              fontWeight: 600, fontSize: 14,
+            }}
+          >
+            Ask →
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
