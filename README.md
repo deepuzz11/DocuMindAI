@@ -10,8 +10,8 @@
 ## Architecture
 
 The system follows a standard RAG (Retrieval-Augmented Generation) pattern, optimized for low latency and high accuracy using local embeddings and high-performance inference.
-<img width="579" height="354" alt="image" src="https://github.com/user-attachments/assets/3e0eaf01-451e-4a57-b60a-2cb62213d449" />
 
+<img width="812" height="411" alt="1 drawio" src="https://github.com/user-attachments/assets/90f10c8d-9cbd-47c5-8ff8-4c7995545c63" />
 
 ## Tech Stack
 
