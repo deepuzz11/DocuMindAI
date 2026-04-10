@@ -10,35 +10,8 @@
 ## Architecture
 
 The system follows a standard RAG (Retrieval-Augmented Generation) pattern, optimized for low latency and high accuracy using local embeddings and high-performance inference.
+<img width="579" height="354" alt="image" src="https://github.com/user-attachments/assets/3e0eaf01-451e-4a57-b60a-2cb62213d449" />
 
-```mermaid
-graph TD
-    User([User / Client]) <--> API[FastAPI Backend]
-    
-    subgraph "Ingestion Pipeline"
-        API --> Extraction[PyMuPDF Text Extraction]
-        Extraction --> Splitting[Recursive Character Splitting]
-        Splitting --> HF_Embed[Local Embeddings: BAAI/bge-small-en]
-        HF_Embed --> VectorStore[(FAISS Vector Store)]
-    end
-    
-    subgraph "Retrieval Pipeline"
-        API --> Search[Similarity Search]
-        Search <--> VectorStore
-        Search --> Context[Prompt Context Builder]
-        Context --> Groq[Groq API: Llama 3 8B]
-        Groq --> Response[Final Answer]
-        Response --> API
-    end
-    
-    style User fill:#ecf0f1,stroke:#2c3e50,stroke-width:2px
-    style API fill:#3498db,stroke:#2c3e50,stroke-width:2px,color:#fff
-    style VectorStore fill:#2ecc71,stroke:#27ae60,stroke-width:2px,color:#fff
-    style Groq fill:#e74c3c,stroke:#c0392b,stroke-width:2px,color:#fff
-```
-
-> [!TIP]
-> You can find the editable diagram source at [diagrams/architecture.drawio](diagrams/architecture.drawio). Use [draw.io](https://app.diagrams.net/) to view or edit it.
 
 ## Tech Stack
 
