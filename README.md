@@ -9,13 +9,36 @@
 
 ## Architecture
 
-```
-PDF Upload → PyMuPDF (extract) → RecursiveCharacterTextSplitter (chunk)
-          → OpenAI Embeddings → FAISS (store)
+The system follows a standard RAG (Retrieval-Augmented Generation) pattern, optimized for low latency and high accuracy using local embeddings and high-performance inference.
 
-User Query → Embed → FAISS similarity search (top-k)
-           → Prompt injection → LLM (GPT-4o) → Streamed answer
+```mermaid
+graph TD
+    User([User / Client]) <--> API[FastAPI Backend]
+    
+    subgraph "Ingestion Pipeline"
+        API --> Extraction[PyMuPDF Text Extraction]
+        Extraction --> Splitting[Recursive Character Splitting]
+        Splitting --> HF_Embed[Local Embeddings: BAAI/bge-small-en]
+        HF_Embed --> VectorStore[(FAISS Vector Store)]
+    end
+    
+    subgraph "Retrieval Pipeline"
+        API --> Search[Similarity Search]
+        Search <--> VectorStore
+        Search --> Context[Prompt Context Builder]
+        Context --> Groq[Groq API: Llama 3 8B]
+        Groq --> Response[Final Answer]
+        Response --> API
+    end
+    
+    style User fill:#ecf0f1,stroke:#2c3e50,stroke-width:2px
+    style API fill:#3498db,stroke:#2c3e50,stroke-width:2px,color:#fff
+    style VectorStore fill:#2ecc71,stroke:#27ae60,stroke-width:2px,color:#fff
+    style Groq fill:#e74c3c,stroke:#c0392b,stroke-width:2px,color:#fff
 ```
+
+> [!TIP]
+> You can find the editable diagram source at [diagrams/architecture.drawio](diagrams/architecture.drawio). Use [draw.io](https://app.diagrams.net/) to view or edit it.
 
 ## Tech Stack
 
@@ -25,9 +48,9 @@ User Query → Embed → FAISS similarity search (top-k)
 | RAG Framework | LangChain |
 | Vector Store | FAISS (CPU) |
 | PDF Parsing | PyMuPDF (fitz) |
-| Embeddings | OpenAI text-embedding-3-small |
-| LLM | GPT-4o (configurable) |
-| Frontend | React 18 |
+| Embeddings | BAAI/bge-small-en-v1.5 (Local HuggingFace) |
+| LLM | Llama 3 8B (via Groq API) |
+| Frontend | React 18 + Vite |
 | Containerisation | Docker + Docker Compose |
 
 ## Quick Start
@@ -39,7 +62,7 @@ git clone https://github.com/deepuzz11/DocuMindAI.git
 cd DocuMindAI
 
 cp backend/.env.example backend/.env
-# Edit backend/.env → add your OPENAI_API_KEY
+# Edit backend/.env → add your GROQ_API_KEY (get it at https://console.groq.com)
 ```
 
 ### 2. Run with Docker (recommended)
@@ -90,32 +113,6 @@ Prevents cutting off context at chunk boundaries — a sentence split across two
 
 **Document deletion via rebuild?**  
 FAISS doesn't support per-vector deletion. The rebuild-on-delete pattern is correct for small-to-medium corpora and keeps the implementation simple.
-
-## Configuration
-
-All settings live in `backend/.env`:
-
-```env
-OPENAI_API_KEY=sk-...
-LLM_MODEL=gpt-4o            # or gpt-3.5-turbo, mistral, etc.
-CHUNK_SIZE=1000              # characters per chunk
-CHUNK_OVERLAP=200            # overlap between consecutive chunks
-TOP_K=5                      # number of chunks retrieved per query
-```
-
-## Upgrading to Local Embeddings (No OpenAI)
-
-1. `pip install sentence-transformers`
-2. In `rag_engine.py`, replace `OpenAIEmbeddings` with:
-
-```python
-from langchain_community.embeddings import HuggingFaceEmbeddings
-embeddings = HuggingFaceEmbeddings(model_name="BAAI/bge-small-en-v1.5")
-```
-
-## Resume Line
-
-> Built **DocuMindAI**, a production-grade RAG chatbot using **LangChain** and **FAISS** for context-aware PDF querying, with a **FastAPI** backend, streaming SSE responses, and a **React** frontend. Implemented the full ingestion pipeline: PDF extraction (PyMuPDF) → recursive chunking → OpenAI embeddings → vector similarity search → grounded LLM generation.
 
 ## License
 
